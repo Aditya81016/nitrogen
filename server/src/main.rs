@@ -1,3 +1,6 @@
+// modules
+pub mod handler;
+
 // imports
 use std::net::TcpListener;
 use tungstenite::{accept, Message};
@@ -35,11 +38,9 @@ fn main() {
 
                                 // if incoming message is not confirmation message then...
                                 if msg != "Hello, Server!" {
-                                    // reply that the server received it
-                                    ws.send(Message::Text(
-                                        format!("I heard you say: {:?}", msg).to_string(),
-                                    ))
-                                    .unwrap();
+                                    // handle message
+                                    handler::handle(msg);
+                                    ws.send(Message::Text("Success".to_string())).unwrap();
                                 }
                             }
                             _ => (),

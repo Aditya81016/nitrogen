@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 tungstenite = "0.20.1"
+rdev = "0.5.3"

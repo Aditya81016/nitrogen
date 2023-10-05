@@ -2,15 +2,17 @@
 pub mod handler;
 
 // imports
+use local_ip_address::local_ip;
 use std::net::TcpListener;
 use tungstenite::{accept, Message};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     // address for listener
-    let addr = "0.0.0.0:8080";
+    let addr = local_ip().unwrap().to_string() + ":8080";
 
     // creating a tcp listener
-    let listener = TcpListener::bind(addr).unwrap();
+    let listener = TcpListener::bind(&addr).unwrap();
     println!("Listening on: {}", addr);
 
     // handling incoming streams
@@ -49,6 +51,7 @@ fn main() {
                         Err(_) => {
                             // conclude that the client has disconnected
                             println!("Disconnected: {:?}", ws.get_mut().local_addr().unwrap());
+                            handler::handle("release".to_owned());
                         }
                     }
                 }

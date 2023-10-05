@@ -1,9 +1,19 @@
-use std::{thread, time};
+use std::{
+    thread,
+    time::{self, Duration},
+};
 
-use rdev::{listen, simulate, Button, Event, EventType, Key};
+use rdev::{simulate, Button, EventType, Key};
+
+static mut KEYS_PRESSED: Vec<Key> = vec![];
+static mut BUTTONS_PRESSED: Vec<Button> = vec![];
 
 // handle function which will get the msg
 pub fn handle(msg: String) {
+    if msg == "" {
+        return;
+    }
+
     // creates a vector of given commands
     let commands: Vec<&str> = msg.split(" | ").collect();
 
@@ -11,20 +21,20 @@ pub fn handle(msg: String) {
     for command in commands {
         let mut args: Vec<&str> = command.split_ascii_whitespace().collect();
         // if keyboard command is requested
-        if args[0] == "keyboard" {
-            args.remove(0);
-            handle_keyboard(args);
-        } else
-        // if mouse command is requested
-        if args[0] == "mouse" {
-            args.remove(0);
-            handle_mouse(args);
+        if args.len() > 2 {
+            if args[0] == "keyboard" {
+                args.remove(0);
+                handle_keyboard(args);
+            } else
+            // if mouse command is requested
+            if args[0] == "mouse" {
+                args.remove(0);
+                handle_mouse(args);
+            }
         } else
         // if release is requested
         if args[0] == "release" {
-            if let Err(error) = listen(handle_release) {
-                println!("Error: {:?}", error)
-            }
+            handle_release();
         }
     }
 }
@@ -40,7 +50,7 @@ fn handle_keyboard(args: Vec<&str>) {
         } else {
             ms = 250; // default delay of 250ms
         }
-        let delay = time::Duration::from_millis(ms);
+        // let delay = time::Duration::from_millis(ms);
 
         // get the requested key
         let key = get_key(args[1]).unwrap();
@@ -48,11 +58,13 @@ fn handle_keyboard(args: Vec<&str>) {
         // press the request key
         send(&EventType::KeyPress(key));
 
-        // wait for delay to get over
-        thread::sleep(delay);
+        // create a timeout
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(ms)).await;
 
-        // release the key after delay is over
-        send(&EventType::KeyRelease(key));
+            // release the key
+            send(&EventType::KeyRelease(key));
+        });
     } else
     // if press is requested
     if args[0] == "press" {
@@ -89,16 +101,17 @@ fn handle_mouse(args: Vec<&str>) {
         } else {
             ms = 250;
         }
-        let delay = time::Duration::from_millis(ms);
 
         // press the requested button
         send(&EventType::ButtonPress(button));
 
-        // wait for delay to get over
-        thread::sleep(delay);
+        // create a timeout
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(ms)).await;
 
-        // release the requested button
-        send(&EventType::ButtonRelease(button));
+            // release the button
+            send(&EventType::ButtonRelease(button));
+        });
     } else
     // if press is requested
     if args[0] == "press" {
@@ -112,41 +125,42 @@ fn handle_mouse(args: Vec<&str>) {
     } else
     // if move is requested
     if args[0] == "move" {
-        // get requested coordinates
-        let x: f64 = args[1].to_owned().parse().unwrap();
-        let y: f64 = args[2].to_owned().parse().unwrap();
+        if args.len() > 2 {
+            // get requested coordinates
+            let x: f64 = args[1].to_owned().parse().unwrap();
+            let y: f64 = args[2].to_owned().parse().unwrap();
 
-        // move the mouse to requested coordinates
-        send(&EventType::MouseMove { x, y });
+            // move the mouse to requested coordinates
+            send(&EventType::MouseMove { x, y });
+        }
     } else
     // if scroll is requested
     if args[0] == "scroll" {
-        // get the scroll x, y values
-        let x: i64 = args[1].to_owned().parse().unwrap();
-        let y: i64 = args[2].to_owned().parse().unwrap();
+        if args.len() > 2 {
+            // get the scroll x, y values
+            let x: i64 = args[1].to_owned().parse().unwrap();
+            let y: i64 = args[2].to_owned().parse().unwrap();
 
-        // trigger scroll event
-        send(&EventType::Wheel {
-            delta_x: x,
-            delta_y: y,
-        });
+            // trigger scroll event
+            send(&EventType::Wheel {
+                delta_x: x,
+                delta_y: y,
+            });
+        }
     }
 }
 
 // handles release
-fn handle_release(event: Event) {
-    match event.event_type {
-        // get the incoming keypresses and...
-        EventType::KeyPress(key) => {
-            // release them
+fn handle_release() {
+    unsafe {
+        let keys = KEYS_PRESSED.clone();
+        for key in keys {
             send(&EventType::KeyRelease(key));
         }
-        // get the incoming button presses and...
-        EventType::ButtonRelease(button) => {
-            // release them
+        let buttons = BUTTONS_PRESSED.clone();
+        for button in buttons {
             send(&EventType::ButtonRelease(button));
         }
-        _ => (),
     }
 }
 
@@ -154,6 +168,46 @@ fn handle_release(event: Event) {
 // this functions send inputs events to os
 fn send(event_type: &EventType) {
     let delay = time::Duration::from_millis(20);
+
+    match event_type {
+        EventType::KeyPress(key) => unsafe {
+            if KEYS_PRESSED.contains(key) {
+                return;
+            } else {
+                println!("Key pressed: {:?}", key);
+                KEYS_PRESSED.push(key.to_owned());
+            }
+        },
+        EventType::KeyRelease(key) => unsafe {
+            if KEYS_PRESSED.contains(key) {
+                if let Some(index) = KEYS_PRESSED.iter().position(|item| item == key) {
+                    println!("Key released: {:?}", key);
+                    KEYS_PRESSED.remove(index);
+                }
+            } else {
+                return;
+            }
+        },
+        EventType::ButtonPress(button) => unsafe {
+            if BUTTONS_PRESSED.contains(button) {
+                return;
+            } else {
+                println!("Button pressed: {:?}", button);
+                BUTTONS_PRESSED.push(button.to_owned());
+            }
+        },
+        EventType::ButtonRelease(button) => unsafe {
+            if BUTTONS_PRESSED.contains(button) {
+                if let Some(index) = BUTTONS_PRESSED.iter().position(|item| item == button) {
+                    println!("Button released: {:?}", button);
+                    BUTTONS_PRESSED.remove(index);
+                }
+            } else {
+                return;
+            }
+        },
+        _ => (),
+    }
     match simulate(event_type) {
         Ok(()) => (),
         Err(simulate_error) => {
@@ -279,3 +333,6 @@ fn get_key(key_str: &str) -> Option<Key> {
         _ => Some(Key::Unknown(0)), // Handle unknown keys
     }
 }
+
+// a test statement is use when test via ws_testing component
+// mouse move 100 100 | mouse click Left | keyboard hit ControlLeft 3000 | keyboard hit KeyC 

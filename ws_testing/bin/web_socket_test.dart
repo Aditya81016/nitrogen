@@ -3,9 +3,12 @@ import 'package:web_socket_channel/io.dart';
 import 'dart:io';
 
 void main(List<String> args) {
+  print("Enter address: ");
+  String? addr = stdin.readLineSync();
+
   // creating a channel
   final channel = IOWebSocketChannel.connect(
-    Uri.parse("ws://127.0.0.1:8080"),
+    Uri.parse("ws://$addr"),
   );
 
   // send confirmation message

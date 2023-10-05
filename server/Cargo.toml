@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 tungstenite = "0.20.1"
 rdev = "0.5.3"
+tokio = { version = "1.32.0", features = ["macros", "rt", "time", "rt-multi-thread"] }
+local-ip-address = "0.5.6"

@@ -1,6 +1,6 @@
 use std::{thread, time};
 
-use rdev::{simulate, Button, EventType, Key};
+use rdev::{listen, simulate, Button, Event, EventType, Key};
 
 // handle function which will get the msg
 pub fn handle(msg: String) {
@@ -14,11 +14,17 @@ pub fn handle(msg: String) {
         if args[0] == "keyboard" {
             args.remove(0);
             handle_keyboard(args);
-        } else 
+        } else
         // if mouse command is requested
         if args[0] == "mouse" {
             args.remove(0);
             handle_mouse(args);
+        } else
+        // if release is requested
+        if args[0] == "release" {
+            if let Err(error) = listen(handle_release) {
+                println!("Error: {:?}", error)
+            }
         }
     }
 }
@@ -38,7 +44,7 @@ fn handle_keyboard(args: Vec<&str>) {
 
         // get the requested key
         let key = get_key(args[1]).unwrap();
-        
+
         // press the request key
         send(&EventType::KeyPress(key));
 
@@ -47,8 +53,7 @@ fn handle_keyboard(args: Vec<&str>) {
 
         // release the key after delay is over
         send(&EventType::KeyRelease(key));
-    } else 
-    
+    } else
     // if press is requested
     if args[0] == "press" {
         // get the requested key
@@ -56,9 +61,8 @@ fn handle_keyboard(args: Vec<&str>) {
         // press the requested key
         send(&EventType::KeyPress(key));
     } else
-    
     // if release is requested
-     if args[0] == "release" {
+    if args[0] == "release" {
         // get the requested key
         let key = get_key(args[1]).unwrap();
         // release the requested key
@@ -96,21 +100,18 @@ fn handle_mouse(args: Vec<&str>) {
         // release the requested button
         send(&EventType::ButtonRelease(button));
     } else
-    
     // if press is requested
-     if args[0] == "press" {
+    if args[0] == "press" {
         // press the requested button
         send(&EventType::ButtonPress(button));
-    } else 
-    
+    } else
     // if release is requested
     if args[0] == "release" {
         // release the requested button
         send(&EventType::ButtonRelease(button));
     } else
-    
     // if move is requested
-     if args[0] == "move" {
+    if args[0] == "move" {
         // get requested coordinates
         let x: f64 = args[1].to_owned().parse().unwrap();
         let y: f64 = args[2].to_owned().parse().unwrap();
@@ -118,10 +119,8 @@ fn handle_mouse(args: Vec<&str>) {
         // move the mouse to requested coordinates
         send(&EventType::MouseMove { x, y });
     } else
-    
     // if scroll is requested
-     if args[0] == "scroll" {
-
+    if args[0] == "scroll" {
         // get the scroll x, y values
         let x: i64 = args[1].to_owned().parse().unwrap();
         let y: i64 = args[2].to_owned().parse().unwrap();
@@ -134,7 +133,25 @@ fn handle_mouse(args: Vec<&str>) {
     }
 }
 
+// handles release
+fn handle_release(event: Event) {
+    match event.event_type {
+        // get the incoming keypresses and...
+        EventType::KeyPress(key) => {
+            // release them
+            send(&EventType::KeyRelease(key));
+        }
+        // get the incoming button presses and...
+        EventType::ButtonRelease(button) => {
+            // release them
+            send(&EventType::ButtonRelease(button));
+        }
+        _ => (),
+    }
+}
+
 // i found this function from rdev documentaions
+// this functions send inputs events to os
 fn send(event_type: &EventType) {
     let delay = time::Duration::from_millis(20);
     match simulate(event_type) {
